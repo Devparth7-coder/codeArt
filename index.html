@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Generative Art</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: black;
+        }
+        
+        canvas {
+            display: block;
+        }
+        
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 10;
+        }
+        
+        button {
+            padding: 10px 20px;
+            font-size: 14px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="controls">
+        <button id="addAudioVisualizer">Audio Visualizer</button>
+        <button id="captureArt">Save Art</button>
+    </div>
+    <canvas id="artCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('artCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let particles = [];
+        let audioVisualizerEnabled = false;
+
+        // Particle class
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x || Math.random() * canvas.width;
+                this.y = y || Math.random() * canvas.height;
+                this.radius = Math.random() * 4 + 2;
+                this.speedX = Math.random() * 2 - 1;
+                this.speedY = Math.random() * 2 - 1;
+                this.color = color || `hsl(${Math.random() * 360}, 100%, 50%)`;
+                this.life = 1;
+                this.decay = Math.random() * 0.01 + 0.005;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = this.life;
+                ctx.fill();
+                ctx.globalAlpha = 1; // Reset alpha
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                this.life -= this.decay;
+                if (this.life < 0) this.life = 0;
+            }
+
+            isAlive() {
+                return this.life > 0;
+            }
+        }
+
+        // Create burst of particles
+        function createBurst(x, y) {
+            for (let i = 0; i < 50; i++) {
+                particles.push(new Particle(x, y));
+            }
+        }
+
+        // Background gradient animation
+        let hue = 0;
+
+        function drawBackground() {
+            hue += 0.5;
+            const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            gradient.addColorStop(0, `hsl(${hue}, 50%, 25%)`);
+            gradient.addColorStop(1, `hsl(${hue + 100}, 50%, 10%)`);
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // Audio Visualizer
+        let audioContext, analyser, bufferLength, dataArray;
+
+        function initAudioVisualizer() {
+            navigator.mediaDevices.getUserMedia({
+                audio: true
+            }).then((stream) => {
+                audioContext = new(window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(stream);
+                analyser = audioContext.createAnalyser();
+                source.connect(analyser);
+                analyser.fftSize = 128;
+                bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+                audioVisualizerEnabled = true;
+            });
+        }
+
+        function drawAudioVisualizer() {
+            if (!audioVisualizerEnabled) return;
+
+            analyser.getByteFrequencyData(dataArray);
+
+            const barWidth = canvas.width / bufferLength;
+            dataArray.forEach((value, i) => {
+                const barHeight = value / 2;
+                const x = i * barWidth;
+                const y = canvas.height - barHeight;
+                ctx.fillStyle = `hsl(${i * 2}, 100%, 50%)`;
+                ctx.fillRect(x, y, barWidth, barHeight);
+            });
+        }
+
+        // Animation loop
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBackground();
+            drawAudioVisualizer();
+
+            particles.forEach((particle, index) => {
+                if (particle.isAlive()) {
+                    particle.update();
+                    particle.draw();
+                } else {
+                    particles.splice(index, 1);
+                }
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        // Event listeners
+        canvas.addEventListener('mousemove', (e) => createBurst(e.clientX, e.clientY));
+        canvas.addEventListener('click', (e) => createBurst(e.clientX, e.clientY));
+
+        document.getElementById('addAudioVisualizer').addEventListener('click', () => {
+            if (!audioVisualizerEnabled) {
+                initAudioVisualizer();
+                alert('Audio Visualizer Activated! Allow microphone access.');
+            } else {
+                alert('Audio Visualizer is already active!');
+            }
+        });
+
+        document.getElementById('captureArt').addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'generated-art.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        });
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        animate();
+    </script>
+</body>
+
+</html>
